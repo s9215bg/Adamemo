@@ -1,0 +1,16 @@
+{
+  "name": "Adamemo",
+  "short_name": "Adamemo",
+  "description": "簡潔的待辦與清單工具",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f4f5f1",
+  "theme_color": "#1f6f5b",
+  "icons": [
+    {
+      "src": "assets/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

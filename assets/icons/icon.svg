@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="Adamemo">
+  <rect width="192" height="192" rx="32" fill="#1f6f5b"/>
+  <path d="M44 142 82 50h28l38 92h-29l-7-18H80l-7 18H44Zm45-41h15L97 80l-8 21Z" fill="#fff"/>
+  <path d="M48 150h96" stroke="#f2c14e" stroke-width="12" stroke-linecap="round"/>
+</svg>

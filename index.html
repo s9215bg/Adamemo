@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
+    <meta name="theme-color" content="#1f6f5b" />
+    <title>Adamemo</title>
+    <link rel="manifest" href="manifest.json" />
+    <link rel="stylesheet" href="assets/css/style.css" />
+  </head>
+  <body>
+    <div id="app-shell" class="app-shell home-mode">
+      <header class="app-header">
+        <button id="back-button" class="icon-button hidden" type="button" aria-label="返回首頁">←</button>
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">A</span>
+          <div>
+            <h1>Adamemo</h1>
+            <p id="sync-status">正在準備同步</p>
+          </div>
+        </div>
+      </header>
+
+      <main class="main-panel">
+        <section id="home-view" class="home-view" aria-label="分類入口">
+          <button class="entry-card todo-card" data-section="task" type="button">
+            <span class="entry-label">To do</span>
+            <strong id="todo-count">0</strong>
+            <small>有期限、會推進的待辦</small>
+          </button>
+
+          <button class="entry-card list-card" data-section="info" type="button">
+            <span class="entry-label">List</span>
+            <strong id="list-count">0</strong>
+            <small>樂譜收納與查詢</small>
+          </button>
+        </section>
+
+        <section id="section-view" class="section-view hidden" aria-labelledby="section-title">
+          <div class="section-toolbar">
+            <div>
+              <h2 id="section-title">To do</h2>
+              <p id="section-summary">0 個項目</p>
+            </div>
+          </div>
+
+          <input id="search-input" class="search-input" type="search" placeholder="搜尋標題、內容或標籤" autocomplete="off" />
+          <section id="score-filters" class="score-filters hidden" aria-label="樂譜難度篩選">
+            <label>
+              <span>木管能力</span>
+              <select id="filter-woodwind" data-score-filter="woodwind">
+                <option value="">全部</option>
+                <option value="1">1 星以內</option>
+                <option value="2">2 星以內</option>
+                <option value="3">3 星以內</option>
+                <option value="4">4 星以內</option>
+                <option value="5">5 星以內</option>
+              </select>
+            </label>
+            <label>
+              <span>銅管能力</span>
+              <select id="filter-brass" data-score-filter="brass">
+                <option value="">全部</option>
+                <option value="1">1 星以內</option>
+                <option value="2">2 星以內</option>
+                <option value="3">3 星以內</option>
+                <option value="4">4 星以內</option>
+                <option value="5">5 星以內</option>
+              </select>
+            </label>
+            <label>
+              <span>打擊能力</span>
+              <select id="filter-percussion" data-score-filter="percussion">
+                <option value="">全部</option>
+                <option value="1">1 星以內</option>
+                <option value="2">2 星以內</option>
+                <option value="3">3 星以內</option>
+                <option value="4">4 星以內</option>
+                <option value="5">5 星以內</option>
+              </select>
+            </label>
+          </section>
+          <div id="item-list" class="item-list"></div>
+          <button id="new-item-button" class="add-item-button" type="button">新增</button>
+        </section>
+      </main>
+    </div>
+
+    <script src="assets/js/mock-data.js"></script>
+    <script src="assets/js/app.js"></script>
+  </body>
+</html>
