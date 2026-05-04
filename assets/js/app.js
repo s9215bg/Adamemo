@@ -62,6 +62,7 @@
     elements.backButton.addEventListener("click", showHome);
     elements.newItemButton.addEventListener("click", startNewDraft);
     elements.itemList.addEventListener("click", handleListClick);
+    elements.itemList.addEventListener("keydown", handleListKeydown);
     elements.itemList.addEventListener("submit", handleDetailSubmit);
 
     elements.searchInput.addEventListener("input", (event) => {
@@ -191,7 +192,7 @@
     const progress = isTask ? getDueProgress(item) : 0;
     const progressStyle = isTask && item.dueDate ? ` style="transform: scaleX(${progress});"` : "";
     const dueText = item.dueDate ? formatDate(item.dueDate) : "無期限";
-    const tags = item.tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("");
+    const tags = sortTagsByLanguage(item.tags).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("");
     const scoreMeta = isTask ? "" : renderScoreListMeta(item);
     const active = item.id === state.selectedId ? " active" : "";
     const completed = isTask && item.status === "completed" ? " completed" : "";
@@ -273,10 +274,7 @@
 
           ${!isTask ? renderScoreEditorFields(item) : ""}
 
-          <label class="field">
-            <span>標籤</span>
-            <input name="tags" value="${escapeAttr(item.tags.join(", "))}" placeholder="以逗號分隔" />
-          </label>
+          ${renderTagEditor(item.tags)}
 
           <label class="field">
             <span>${isTask ? "內容" : "備註 / 收納資料"}</span>
@@ -291,7 +289,8 @@
       `;
     }
 
-    const detailTags = item.tags.length ? item.tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("") : "<em>沒有標籤</em>";
+    const sortedDetailTags = sortTagsByLanguage(item.tags);
+    const detailTags = sortedDetailTags.length ? sortedDetailTags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("") : "<em>沒有標籤</em>";
 
     return `
       <div class="expanded-detail readonly-detail">
@@ -328,7 +327,10 @@
 
       <label class="field">
         <span>URL 樂譜電子檔連結</span>
-        <input name="url" type="url" inputmode="url" value="${escapeAttr(item.url || "")}" />
+        <div class="url-input-row">
+          <input name="url" type="url" inputmode="url" value="${escapeAttr(item.url || "")}" />
+          <button class="secondary-button copy-url-button" data-action="copy-url-input" type="button">複製</button>
+        </div>
       </label>
 
       <div class="field-grid three">
@@ -340,7 +342,9 @@
   }
 
   function renderScoreReadonlyFields(item) {
-    const url = item.url ? `<a href="${escapeAttr(item.url)}" target="_blank" rel="noopener">開啟樂譜連結</a>` : "未填寫";
+    const url = item.url
+      ? `<span class="url-value"><a href="${escapeAttr(item.url)}" target="_blank" rel="noopener">開啟樂譜連結</a><button class="secondary-button copy-url-button" data-action="copy-url" data-url="${escapeAttr(item.url)}" type="button">複製</button></span>`
+      : "未填寫";
     return `
       <dl>
         <div><dt>Composer</dt><dd>${escapeHtml(item.composer || "未填寫")}</dd></div>
@@ -394,10 +398,7 @@
             </div>
           ` : renderScoreEditorFields(createItemFromDraft({ dataset: { type: "info" } }))}
 
-          <label class="field">
-            <span>標籤</span>
-            <input name="tags" placeholder="以逗號分隔" />
-          </label>
+          ${renderTagEditor([])}
 
           <label class="field">
             <span>${isTask ? "內容" : "備註 / 收納資料"}</span>
@@ -454,6 +455,25 @@
     if (action === "delete") {
       deleteSelectedItem(id);
     }
+
+    if (action === "add-tag") {
+      addTag(actionElement.closest(".tag-editor"));
+      return;
+    }
+
+    if (action === "remove-tag") {
+      actionElement.closest(".tag-chip-edit")?.remove();
+      return;
+    }
+
+    if (action === "copy-url") {
+      copyUrl(actionElement.dataset.url || "", actionElement);
+      return;
+    }
+
+    if (action === "copy-url-input") {
+      copyUrlFromInput(actionElement);
+    }
   }
 
   function handleDetailSubmit(event) {
@@ -461,6 +481,26 @@
     const form = event.target.closest(".editor-form");
     if (!form) return;
     saveEditor(form.dataset.id, form);
+  }
+
+  function handleListKeydown(event) {
+    if (event.key !== "Enter" || !event.target.matches("[data-tag-input]")) return;
+    event.preventDefault();
+    addTag(event.target.closest(".tag-editor"));
+  }
+
+  function addTag(editor) {
+    if (!editor) return;
+    const input = editor.querySelector("[data-tag-input]");
+    const value = input.value.trim();
+    if (!value) return;
+    const tags = collectTags(editor);
+    if (!tags.includes(value)) {
+      editor.querySelector(".tag-editor-list").insertAdjacentHTML("beforeend", renderEditableTag(value));
+      sortTagEditor(editor);
+    }
+    input.value = "";
+    input.focus();
   }
 
   function cssEscape(value) {
@@ -478,7 +518,7 @@
     item.title = String(formData.get("title") || "").trim() || "未命名";
     item.dueDate = isTask && formData.get("dueDate") ? new Date(formData.get("dueDate")).toISOString() : "";
     item.status = isTask ? String(formData.get("status") || "pending") : "stored";
-    item.tags = String(formData.get("tags") || "").split(",").map((tag) => tag.trim()).filter(Boolean);
+    item.tags = sortTagsByLanguage(collectTags(form.querySelector(".tag-editor")));
     item.content = String(formData.get("content") || "").trim();
     if (!isTask) {
       item.composer = String(formData.get("composer") || "").trim();
@@ -524,6 +564,85 @@
       content: "",
       updatedAt: now.toISOString()
     });
+  }
+
+  function renderTagEditor(tags) {
+    const sortedTags = sortTagsByLanguage(tags);
+    return `
+      <section class="field tag-editor">
+        <span>標籤</span>
+        <div class="tag-editor-list">
+          ${sortedTags.map(renderEditableTag).join("")}
+        </div>
+        <div class="tag-input-row">
+          <input data-tag-input type="text" placeholder="新增單一標籤" />
+          <button class="secondary-button tag-add-button" data-action="add-tag" type="button" aria-label="新增標籤">+</button>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderEditableTag(tag) {
+    return `
+      <span class="tag-chip-edit" data-tag-value="${escapeAttr(tag)}">
+        ${escapeHtml(tag)}
+        <button data-action="remove-tag" type="button" aria-label="移除 ${escapeAttr(tag)}">×</button>
+      </span>
+    `;
+  }
+
+  function collectTags(editor) {
+    if (!editor) return [];
+    return [...editor.querySelectorAll("[data-tag-value]")]
+      .map((tag) => tag.dataset.tagValue.trim())
+      .filter(Boolean);
+  }
+
+  function sortTagEditor(editor) {
+    const list = editor.querySelector(".tag-editor-list");
+    const tags = sortTagsByLanguage(collectTags(editor));
+    list.innerHTML = tags.map(renderEditableTag).join("");
+  }
+
+  async function copyUrl(url, button) {
+    const originalText = button.textContent;
+    if (!url) {
+      button.textContent = "沒有連結";
+      window.setTimeout(() => {
+        button.textContent = originalText;
+      }, 1400);
+      return;
+    }
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        fallbackCopyText(url);
+      }
+      button.textContent = "已複製";
+    } catch (error) {
+      button.textContent = "複製失敗";
+    }
+    window.setTimeout(() => {
+      button.textContent = originalText;
+    }, 1400);
+  }
+
+  function copyUrlFromInput(button) {
+    const input = button.closest(".url-input-row")?.querySelector("input[name='url']");
+    copyUrl(input?.value.trim() || "", button);
+  }
+
+  function fallbackCopyText(text) {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.append(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
   }
 
   async function deleteSelectedItem(id) {
@@ -651,7 +770,7 @@
       arranger: item.arranger || "",
       url: item.url || "",
       difficulty: normalizeDifficulty(item.difficulty),
-      tags: Array.isArray(item.tags) ? item.tags : [],
+      tags: Array.isArray(item.tags) ? sortTagsByLanguage(item.tags) : [],
       content: item.content || "",
       updatedAt: item.updatedAt || item.updated_at || new Date().toISOString()
     };
@@ -695,6 +814,30 @@
     elements.scoreFilters.querySelectorAll("select").forEach((select) => {
       select.value = "";
     });
+  }
+
+  function sortTagsByLanguage(tags) {
+    const uniqueTags = [...new Set((tags || []).map((tag) => String(tag).trim()).filter(Boolean))];
+    return uniqueTags.sort((a, b) => {
+      const languageDiff = getTagLanguageOrder(a) - getTagLanguageOrder(b);
+      if (languageDiff) return languageDiff;
+      return compareByFirstCharacter(a, b);
+    });
+  }
+
+  function getTagLanguageOrder(tag) {
+    if (/[\u4e00-\u9fff]/.test(tag)) return 0;
+    if (/^[A-Za-z]/.test(tag)) return 1;
+    if (/[\u3040-\u30ff]/.test(tag)) return 2;
+    return 3;
+  }
+
+  function compareByFirstCharacter(a, b) {
+    const normalizedA = a.toLocaleLowerCase();
+    const normalizedB = b.toLocaleLowerCase();
+    const firstDiff = normalizedA.codePointAt(0) - normalizedB.codePointAt(0);
+    if (firstDiff) return firstDiff;
+    return normalizedA.localeCompare(normalizedB, "en", { sensitivity: "base", numeric: true });
   }
 
   function dateValue(dateLike) {

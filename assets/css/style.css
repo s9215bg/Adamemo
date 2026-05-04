@@ -482,6 +482,88 @@ textarea {
   gap: 6px;
 }
 
+.tag-editor {
+  display: grid;
+  gap: 8px;
+}
+
+.tag-editor-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 30px;
+}
+
+.tag-chip-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  border: 1px solid var(--theme-line);
+  border-radius: 999px;
+  background: var(--theme-soft);
+  color: var(--theme-dark);
+  padding: 4px 8px 4px 10px;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.tag-chip-edit button {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--theme-dark);
+  font-weight: 900;
+  padding: 0;
+}
+
+.tag-input-row {
+  display: inline-grid;
+  grid-template-columns: 10em 38px;
+  gap: 0;
+  justify-self: start;
+  width: max-content;
+}
+
+.tag-input-row input {
+  width: 10em;
+  border-radius: 8px 0 0 8px;
+  border-right: 0;
+}
+
+.tag-add-button {
+  min-height: 40px;
+  border-radius: 0 8px 8px 0;
+  padding: 0;
+}
+
+.url-value {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.copy-url-button {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 0.84rem;
+}
+
+.url-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.url-input-row .copy-url-button {
+  min-height: 42px;
+}
+
 .item-tags span,
 .readonly-tags span,
 .category-pill {
