@@ -104,7 +104,7 @@
         collectionRef,
         async (snapshot) => {
           const remoteItems = snapshot.docs.map((document) => normalizeItem({ id: document.id, ...document.data() }));
-          if (!remoteItems.length && !localStorage.getItem(SEEDED_KEY)) {
+          if (!remoteItems.length && hasStoredLocalItems() && !localStorage.getItem(SEEDED_KEY)) {
             localStorage.setItem(SEEDED_KEY, "true");
             try {
               await Promise.all(state.items.map((item) => writeRemote(item)));
@@ -743,14 +743,21 @@
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) return parsed.map(normalizeItem);
       } catch (error) {
-        return loadMockItems();
+        return [];
       }
     }
-    return loadMockItems();
+    return [];
   }
 
-  function loadMockItems() {
-    return JSON.parse(JSON.stringify(window.ADAMEMO_MOCK_ITEMS || [])).map(normalizeItem);
+  function hasStoredLocalItems() {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return false;
+    try {
+      const parsed = JSON.parse(stored);
+      return Array.isArray(parsed) && parsed.length > 0;
+    } catch (error) {
+      return false;
+    }
   }
 
   function saveLocalItems() {
