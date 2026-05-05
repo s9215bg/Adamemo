@@ -12,6 +12,9 @@ permissions:
   pages: write
   id-token: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -38,13 +41,22 @@ jobs:
           FIREBASE_MEASUREMENT_ID: ${{ secrets.FIREBASE_MEASUREMENT_ID }}
         run: |
           set -euo pipefail
-          test -n "$FIREBASE_API_KEY"
-          test -n "$FIREBASE_AUTH_DOMAIN"
-          test -n "$FIREBASE_PROJECT_ID"
-          test -n "$FIREBASE_STORAGE_BUCKET"
-          test -n "$FIREBASE_MESSAGING_SENDER_ID"
-          test -n "$FIREBASE_APP_ID"
-          test -n "$FIREBASE_MEASUREMENT_ID"
+
+          require_secret() {
+            local name="$1"
+            local value="$2"
+            if [ -z "$value" ]; then
+              echo "::error::Missing GitHub secret: $name"
+              exit 1
+            fi
+          }
+
+          require_secret "FIREBASE_API_KEY" "$FIREBASE_API_KEY"
+          require_secret "FIREBASE_AUTH_DOMAIN" "$FIREBASE_AUTH_DOMAIN"
+          require_secret "FIREBASE_PROJECT_ID" "$FIREBASE_PROJECT_ID"
+          require_secret "FIREBASE_STORAGE_BUCKET" "$FIREBASE_STORAGE_BUCKET"
+          require_secret "FIREBASE_MESSAGING_SENDER_ID" "$FIREBASE_MESSAGING_SENDER_ID"
+          require_secret "FIREBASE_APP_ID" "$FIREBASE_APP_ID"
 
           cat > assets/js/firebase-config.js <<EOF
           window.ADAMEMO_FIREBASE_CONFIG = {
