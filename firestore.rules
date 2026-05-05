@@ -3,18 +3,15 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /items/{itemId} {
-      // The current app uses a client-side passcode gate, so Firestore must
-      // remain writable by the app. For database-enforced admin access, add
-      // Firebase Auth and replace this with request.auth based rules.
+      // Public visitors can read shared content, but writes must not be
+      // trusted from the browser. Add Firebase Auth or a backend write path
+      // before enabling edits again.
       allow read: if true;
-      allow write: if true;
+      allow write: if false;
     }
 
     match /settings/admin {
-      // Stores passcodeHash. This prevents a plaintext passcode in app.js, but
-      // it is not equivalent to server-side authorization.
-      allow read: if true;
-      allow write: if true;
+      allow read, write: if false;
     }
 
     match /{document=**} {
