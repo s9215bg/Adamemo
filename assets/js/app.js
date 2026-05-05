@@ -1,6 +1,9 @@
 (function () {
   const STORAGE_KEY = "adamemo-items";
   const SEEDED_KEY = "adamemo-firestore-seeded";
+  const ADMIN_SESSION_KEY = "adamemo-admin-session";
+  const ADMIN_SETTINGS_COLLECTION = "settings";
+  const ADMIN_SETTINGS_DOC = "admin";
   const DRAFT_ID = "__draft__";
   const FIREBASE_CONFIG = {
     apiKey: "AIzaSyDFA5r_Jaz8NhehGo3UjgF8vw2S_WR9Zl4",
@@ -23,6 +26,8 @@
     search: "",
     editing: false,
     draftType: "",
+    admin: loadAdminSession(),
+    shareMode: isShareMode(),
     scoreFilters: {
       woodwind: "",
       brass: "",
@@ -44,6 +49,16 @@
     todoCount: document.querySelector("#todo-count"),
     listCount: document.querySelector("#list-count"),
     itemList: document.querySelector("#item-list"),
+    shareLinkButton: document.querySelector("#share-link-button"),
+    loginButton: document.querySelector("#login-button"),
+    adminStatus: document.querySelector("#admin-status"),
+    refreshButton: document.querySelector("#refresh-button"),
+    loginPanel: document.querySelector("#login-panel"),
+    loginForm: document.querySelector("#login-form"),
+    loginPasscode: document.querySelector("#login-passcode"),
+    loginMessage: document.querySelector("#login-message"),
+    loginSubmitButton: document.querySelector("#login-submit-button"),
+    loginCloseButton: document.querySelector("#login-close-button"),
     filterControls: document.querySelector("#filter-controls"),
     searchInput: document.querySelector("#search-input"),
     filterToggle: document.querySelector("#filter-toggle"),
@@ -58,9 +73,28 @@
   function init() {
     document.body.classList.add("home-page");
     registerServiceWorker();
+    preventViewportZoom();
     bindEvents();
+    applyInitialRoute();
     render();
     connectFirebase();
+  }
+
+  function preventViewportZoom() {
+    const stopZoom = (event) => event.preventDefault();
+    document.addEventListener("gesturestart", stopZoom, { passive: false });
+    document.addEventListener("gesturechange", stopZoom, { passive: false });
+    document.addEventListener("gestureend", stopZoom, { passive: false });
+    document.addEventListener("touchmove", (event) => {
+      if (event.touches.length > 1) event.preventDefault();
+    }, { passive: false });
+
+    let lastTouchEnd = 0;
+    document.addEventListener("touchend", (event) => {
+      const now = Date.now();
+      if (now - lastTouchEnd <= 300) event.preventDefault();
+      lastTouchEnd = now;
+    }, { passive: false });
   }
 
   function bindEvents() {
@@ -69,6 +103,17 @@
     });
 
     elements.backButton.addEventListener("click", showHome);
+    elements.shareLinkButton.addEventListener("click", copyShareLink);
+    elements.loginButton.addEventListener("click", openLoginPanel);
+    elements.loginButton.addEventListener("touchend", handleLoginTouch, { passive: false });
+    elements.adminStatus.addEventListener("click", handleLogout);
+    elements.refreshButton.addEventListener("click", clearCachesAndReload);
+    elements.loginForm?.addEventListener("submit", handleLoginSubmit);
+    elements.loginSubmitButton?.addEventListener("click", handleLoginSubmitButton);
+    elements.loginSubmitButton?.addEventListener("touchend", handleLoginSubmitTouch, { passive: false });
+    elements.loginCloseButton?.addEventListener("click", closeLoginPanel);
+    elements.loginCloseButton?.addEventListener("touchend", handleLoginCloseTouch, { passive: false });
+    elements.loginPasscode?.addEventListener("input", normalizePasscodeInput);
     elements.newItemButton.addEventListener("click", startNewDraft);
     elements.itemList.addEventListener("click", handleListClick);
     elements.itemList.addEventListener("keydown", handleListKeydown);
@@ -118,14 +163,15 @@
 
       const db = firestore.getFirestore(app);
       const collectionRef = firestore.collection(db, "items");
-      state.firebase = { db, collectionRef, firestore };
+      const adminSettingsRef = firestore.doc(db, ADMIN_SETTINGS_COLLECTION, ADMIN_SETTINGS_DOC);
+      state.firebase = { db, collectionRef, adminSettingsRef, firestore };
       setSyncStatus("Firebase 同步中");
 
       state.unsubscribe = firestore.onSnapshot(
         collectionRef,
         async (snapshot) => {
           const remoteItems = snapshot.docs.map((document) => normalizeItem({ id: document.id, ...document.data() }));
-          if (!remoteItems.length && hasStoredLocalItems() && !localStorage.getItem(SEEDED_KEY)) {
+          if (!remoteItems.length && canEdit() && hasStoredLocalItems() && !localStorage.getItem(SEEDED_KEY)) {
             localStorage.setItem(SEEDED_KEY, "true");
             try {
               await Promise.all(state.items.map((item) => writeRemote(item)));
@@ -151,6 +197,23 @@
     }
   }
 
+  function applyInitialRoute() {
+    if (!state.shareMode) return;
+    state.admin = false;
+    state.section = "info";
+    state.search = "";
+    state.selectedId = "";
+    state.editing = false;
+    state.draftType = "";
+    state.filtersOpen = false;
+    elements.homeView.classList.add("hidden");
+    elements.sectionView.classList.remove("hidden");
+    elements.backButton.classList.add("hidden");
+    document.body.classList.remove("home-page");
+    elements.shell.classList.remove("home-mode", "theme-task", "theme-info");
+    elements.shell.classList.add("theme-info");
+  }
+
   function openSection(section) {
     state.section = section;
     state.search = "";
@@ -170,6 +233,7 @@
   }
 
   function showHome() {
+    if (state.shareMode) return;
     state.section = "";
     state.selectedId = "";
     state.editing = false;
@@ -187,7 +251,17 @@
   function render() {
     elements.todoCount.textContent = state.items.filter((item) => item.type === "task" && item.status !== "completed").length;
     elements.listCount.textContent = state.items.filter((item) => item.type === "info").length;
+    renderHeaderActions();
     renderList();
+  }
+
+  function renderHeaderActions() {
+    const isHome = !state.section && !state.shareMode;
+    const isInfo = state.section === "info";
+    elements.shareLinkButton.classList.toggle("hidden", !isInfo);
+    elements.loginButton.classList.toggle("hidden", !isHome || state.admin);
+    elements.adminStatus.classList.toggle("hidden", !isHome || !state.admin);
+    elements.refreshButton.classList.toggle("hidden", !isHome);
   }
 
   function renderList() {
@@ -198,7 +272,7 @@
     elements.sectionTitle.textContent = sectionName;
     elements.sectionSummary.textContent = `${items.length} 個項目`;
     elements.newItemButton.textContent = `新增 ${sectionName}`;
-    elements.newItemButton.classList.toggle("hidden", Boolean(state.draftType));
+    elements.newItemButton.classList.toggle("hidden", Boolean(state.draftType) || !canEdit());
     elements.searchInput.placeholder = state.section === "info" ? "搜尋曲名、作曲家、編曲家、標籤" : "搜尋標題、內容或標籤";
     updateFilterControls();
 
@@ -284,6 +358,9 @@
 
   function renderExpandedDetail(item) {
     const isTask = item.type === "task";
+    if (state.editing && !canEdit()) {
+      state.editing = false;
+    }
     if (state.editing) {
       return `
         <form class="expanded-detail editor-form" data-id="${escapeAttr(item.id)}">
@@ -339,7 +416,7 @@
       <div class="expanded-detail readonly-detail">
         <div class="detail-topline">
           <span class="category-pill">${getSectionName(item.type)}</span>
-          <button class="secondary-button" data-action="edit" data-id="${escapeAttr(item.id)}" type="button">編輯</button>
+          ${canEdit() ? `<button class="secondary-button" data-action="edit" data-id="${escapeAttr(item.id)}" type="button">編輯</button>` : ""}
         </div>
         <h2>${escapeHtml(item.title)}</h2>
         ${isTask ? `
@@ -462,6 +539,11 @@
     if (!actionElement) return;
     const action = actionElement.dataset.action;
     const id = actionElement.dataset.id;
+    const writeActions = new Set(["edit", "delete", "add-tag", "remove-tag", "copy-url-input"]);
+    if (writeActions.has(action) && !canEdit()) {
+      requireAdmin();
+      return;
+    }
 
     if (action === "toggle-detail") {
       state.selectedId = state.selectedId === id ? "" : id;
@@ -521,6 +603,10 @@
 
   function handleDetailSubmit(event) {
     event.preventDefault();
+    if (!canEdit()) {
+      requireAdmin();
+      return;
+    }
     const form = event.target.closest(".editor-form");
     if (!form) return;
     saveEditor(form.dataset.id, form);
@@ -528,11 +614,16 @@
 
   function handleListKeydown(event) {
     if (event.key !== "Enter" || !event.target.matches("[data-tag-input]")) return;
+    if (!canEdit()) {
+      requireAdmin();
+      return;
+    }
     event.preventDefault();
     addTag(event.target.closest(".tag-editor"));
   }
 
   function addTag(editor) {
+    if (!canEdit()) return;
     if (!editor) return;
     const input = editor.querySelector("[data-tag-input]");
     const value = input.value.trim();
@@ -552,6 +643,10 @@
   }
 
   async function saveEditor(id, form) {
+    if (!canEdit()) {
+      requireAdmin();
+      return;
+    }
     const isDraft = id === DRAFT_ID;
     const item = isDraft ? createItemFromDraft(form) : state.items.find((current) => current.id === id);
     if (!item) return;
@@ -676,6 +771,268 @@
     copyUrl(input?.value.trim() || "", button);
   }
 
+  async function copyShareLink() {
+    const originalText = elements.shareLinkButton.textContent;
+    const url = new URL(window.location.href);
+    url.search = "?share=list";
+    url.hash = "";
+    try {
+      await copyText(url.toString());
+      elements.shareLinkButton.textContent = "已複製";
+    } catch (error) {
+      elements.shareLinkButton.textContent = "複製失敗";
+    }
+    window.setTimeout(() => {
+      elements.shareLinkButton.textContent = originalText;
+    }, 1400);
+  }
+
+  function openLoginPanel() {
+    if (state.shareMode) return;
+    if (!elements.loginPanel || !elements.loginPasscode) {
+      window.alert("登入面板尚未更新，請按重新整理清除快取。");
+      return;
+    }
+    elements.loginPanel.classList.remove("hidden");
+    elements.loginMessage.textContent = "";
+    elements.loginPasscode.value = "";
+    window.setTimeout(() => {
+      elements.loginPasscode.focus();
+      elements.loginPasscode.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 120);
+  }
+
+  function handleLoginTouch(event) {
+    event.preventDefault();
+    openLoginPanel();
+  }
+
+  function closeLoginPanel() {
+    elements.loginPanel.classList.add("hidden");
+    elements.loginMessage.textContent = "";
+    elements.loginPasscode.value = "";
+    setLoginBusy(false, "");
+  }
+
+  function handleLoginCloseTouch(event) {
+    event.preventDefault();
+    closeLoginPanel();
+  }
+
+  function normalizePasscodeInput() {
+    elements.loginPasscode.value = elements.loginPasscode.value.replace(/\D/g, "").slice(0, 6);
+  }
+
+  function handleLoginSubmitButton(event) {
+    if (event.detail === 0) return;
+    event.preventDefault();
+    submitLogin();
+  }
+
+  function handleLoginSubmitTouch(event) {
+    event.preventDefault();
+    submitLogin();
+  }
+
+  async function handleLoginSubmit(event) {
+    event.preventDefault();
+    submitLogin();
+  }
+
+  async function submitLogin() {
+    if (elements.loginSubmitButton.disabled) return;
+    if (state.shareMode) return;
+    if (!state.firebase) {
+      setLoginMessage("Firebase 尚未連線，請稍後再試。");
+      return;
+    }
+    const passcode = elements.loginPasscode.value.trim();
+    if (!/^\d{6}$/.test(passcode)) {
+      setLoginMessage("請輸入 6 位數字。");
+      return;
+    }
+
+    let passcodeHash = "";
+    try {
+      setLoginBusy(true, "正在讀取密碼設定...");
+      passcodeHash = await withTimeout(loadAdminPasscodeHash(), 8000, "讀取 Firebase 逾時，請確認手機網路。");
+    } catch (error) {
+      setLoginBusy(false, error.message || "無法讀取 Firebase 密碼設定。");
+      return;
+    }
+
+    if (!passcodeHash) {
+      setLoginBusy(false, "尚未在 Firebase 建立密碼設定。");
+      return;
+    }
+
+    let inputHash = "";
+    try {
+      setLoginBusy(true, "正在驗證...");
+      inputHash = await withTimeout(sha256Hex(passcode), 8000, "手機無法完成密碼驗證。");
+    } catch (error) {
+      setLoginBusy(false, error.message || "手機無法完成密碼驗證。");
+      return;
+    }
+
+    if (inputHash !== passcodeHash) {
+      setLoginBusy(false, "密碼錯誤。");
+      return;
+    }
+    state.admin = true;
+    localStorage.setItem(ADMIN_SESSION_KEY, "true");
+    setLoginBusy(false, "");
+    closeLoginPanel();
+    render();
+  }
+
+  function setLoginMessage(message) {
+    elements.loginMessage.textContent = message;
+  }
+
+  function setLoginBusy(busy, message) {
+    elements.loginSubmitButton.disabled = busy;
+    elements.loginPasscode.disabled = busy;
+    elements.loginSubmitButton.textContent = busy ? "驗證中" : "登入";
+    setLoginMessage(message);
+  }
+
+  function withTimeout(promise, timeoutMs, message) {
+    let timer = 0;
+    const timeout = new Promise((_, reject) => {
+      timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    });
+    return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timer));
+  }
+
+  function handleLogout() {
+    const ok = window.confirm("要登出並關閉編輯權嗎？");
+    if (!ok) return;
+    state.admin = false;
+    state.editing = false;
+    state.draftType = "";
+    localStorage.removeItem(ADMIN_SESSION_KEY);
+    render();
+  }
+
+  async function loadAdminPasscodeHash() {
+    const snapshot = await state.firebase.firestore.getDoc(state.firebase.adminSettingsRef);
+    if (!snapshot.exists()) return "";
+    const data = snapshot.data() || {};
+    return String(data.passcodeHash || "").trim().toLowerCase();
+  }
+
+  async function sha256Hex(text) {
+    if (!window.crypto?.subtle) return sha256HexFallback(text);
+    const bytes = new TextEncoder().encode(text);
+    const digest = await window.crypto.subtle.digest("SHA-256", bytes);
+    return [...new Uint8Array(digest)]
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+  }
+
+  function sha256HexFallback(text) {
+    const bytes = utf8Bytes(text);
+    const bitLength = bytes.length * 8;
+    bytes.push(0x80);
+    while ((bytes.length % 64) !== 56) bytes.push(0);
+    for (let shift = 56; shift >= 0; shift -= 8) {
+      bytes.push(Math.floor(bitLength / (2 ** shift)) & 0xff);
+    }
+
+    const hash = [
+      0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+      0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+    ];
+    const constants = [
+      0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+      0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+      0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+      0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+      0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+      0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+      0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+      0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+    ];
+
+    for (let offset = 0; offset < bytes.length; offset += 64) {
+      const words = new Array(64);
+      for (let i = 0; i < 16; i += 1) {
+        const j = offset + i * 4;
+        words[i] = ((bytes[j] << 24) | (bytes[j + 1] << 16) | (bytes[j + 2] << 8) | bytes[j + 3]) >>> 0;
+      }
+      for (let i = 16; i < 64; i += 1) {
+        const s0 = rotateRight(words[i - 15], 7) ^ rotateRight(words[i - 15], 18) ^ (words[i - 15] >>> 3);
+        const s1 = rotateRight(words[i - 2], 17) ^ rotateRight(words[i - 2], 19) ^ (words[i - 2] >>> 10);
+        words[i] = (words[i - 16] + s0 + words[i - 7] + s1) >>> 0;
+      }
+
+      let [a, b, c, d, e, f, g, h] = hash;
+      for (let i = 0; i < 64; i += 1) {
+        const s1 = rotateRight(e, 6) ^ rotateRight(e, 11) ^ rotateRight(e, 25);
+        const ch = (e & f) ^ (~e & g);
+        const temp1 = (h + s1 + ch + constants[i] + words[i]) >>> 0;
+        const s0 = rotateRight(a, 2) ^ rotateRight(a, 13) ^ rotateRight(a, 22);
+        const maj = (a & b) ^ (a & c) ^ (b & c);
+        const temp2 = (s0 + maj) >>> 0;
+        h = g;
+        g = f;
+        f = e;
+        e = (d + temp1) >>> 0;
+        d = c;
+        c = b;
+        b = a;
+        a = (temp1 + temp2) >>> 0;
+      }
+
+      hash[0] = (hash[0] + a) >>> 0;
+      hash[1] = (hash[1] + b) >>> 0;
+      hash[2] = (hash[2] + c) >>> 0;
+      hash[3] = (hash[3] + d) >>> 0;
+      hash[4] = (hash[4] + e) >>> 0;
+      hash[5] = (hash[5] + f) >>> 0;
+      hash[6] = (hash[6] + g) >>> 0;
+      hash[7] = (hash[7] + h) >>> 0;
+    }
+
+    return hash.map((word) => word.toString(16).padStart(8, "0")).join("");
+  }
+
+  function utf8Bytes(text) {
+    return unescape(encodeURIComponent(text)).split("").map((char) => char.charCodeAt(0));
+  }
+
+  function rotateRight(value, bits) {
+    return (value >>> bits) | (value << (32 - bits));
+  }
+
+  async function clearCachesAndReload() {
+    const ok = window.confirm("確定要清除快取並重新整理嗎？資料和登入狀態會保留。");
+    if (!ok) return;
+    try {
+      if (window.caches) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((key) => caches.delete(key)));
+      }
+      if (navigator.serviceWorker?.getRegistrations) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+      }
+      setSyncStatus("快取已清除，重新整理中");
+    } catch (error) {
+      setSyncStatus("快取清除不完整，仍會重新整理");
+    }
+    window.location.reload();
+  }
+
+  async function copyText(text) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+    fallbackCopyText(text);
+  }
+
   function fallbackCopyText(text) {
     const textarea = document.createElement("textarea");
     textarea.value = text;
@@ -689,6 +1046,10 @@
   }
 
   async function deleteSelectedItem(id) {
+    if (!canEdit()) {
+      requireAdmin();
+      return;
+    }
     const item = state.items.find((current) => current.id === id);
     if (!item) return;
     const ok = window.confirm("確定要刪除這個項目嗎？");
@@ -712,6 +1073,10 @@
   }
 
   function startNewDraft() {
+    if (!canEdit()) {
+      requireAdmin();
+      return;
+    }
     state.draftType = state.section || "task";
     state.selectedId = DRAFT_ID;
     state.editing = true;
@@ -721,6 +1086,10 @@
   }
 
   async function persistItem(item) {
+    if (!canEdit()) {
+      requireAdmin();
+      return;
+    }
     saveLocalItems();
     if (state.firebase) {
       try {
@@ -820,6 +1189,24 @@
       }
     }
     return [];
+  }
+
+  function loadAdminSession() {
+    return localStorage.getItem(ADMIN_SESSION_KEY) === "true";
+  }
+
+  function isShareMode() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("share") === "list";
+  }
+
+  function canEdit() {
+    return state.admin && !state.shareMode;
+  }
+
+  function requireAdmin() {
+    if (state.shareMode) return;
+    window.alert("請先登入後再編輯。");
   }
 
   function hasStoredLocalItems() {

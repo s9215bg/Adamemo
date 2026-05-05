@@ -25,6 +25,8 @@ html,
 body {
   width: 100%;
   min-height: 100%;
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -65,7 +67,7 @@ textarea {
 .app-shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 100vh;
   background: var(--bg);
 }
@@ -111,6 +113,13 @@ textarea {
   padding: 18px 22px;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .theme-task .app-header {
   background: rgba(255, 246, 220, 0.9);
 }
@@ -123,6 +132,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
 }
 
 .brand-mark {
@@ -380,6 +390,7 @@ textarea {
 .primary-button,
 .secondary-button,
 .danger-button,
+.header-action-button,
 .icon-button,
 .add-item-button {
   min-height: 40px;
@@ -409,6 +420,34 @@ textarea {
   border-color: var(--line);
   background: var(--surface);
   color: var(--theme-dark);
+}
+
+.header-action-button {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--theme-dark);
+}
+
+.header-action-button:hover {
+  border-color: var(--theme-line);
+  background: var(--surface-soft);
+}
+
+.admin-status {
+  display: inline-grid;
+  min-height: 32px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: #f2a51a;
+  color: white;
+  padding: 0 12px;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.admin-status:hover {
+  background: #c77b05;
 }
 
 .danger-button {
@@ -760,6 +799,57 @@ textarea {
   text-align: center;
 }
 
+.login-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  align-items: start;
+  background: rgba(23, 33, 29, 0.34);
+  padding: 18px;
+  padding-top: max(76px, env(safe-area-inset-top));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.login-card {
+  display: grid;
+  gap: 14px;
+  width: min(100%, 420px);
+  margin: 0 auto;
+  max-height: calc(100dvh - 120px);
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+
+.login-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.login-card h2,
+.login-message {
+  margin: 0;
+}
+
+.login-message {
+  min-height: 1.3em;
+  color: var(--danger);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.safe-footer {
+  min-height: calc(24px + env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+
 @media (max-width: 900px) {
   .app-shell {
     display: block;
@@ -784,6 +874,24 @@ textarea {
 }
 
 @media (max-width: 560px) {
+  .app-header {
+    gap: 8px;
+  }
+
+  .header-actions {
+    gap: 6px;
+  }
+
+  .header-action-button {
+    min-height: 36px;
+    padding: 0 10px;
+  }
+
+  .admin-status {
+    min-height: 30px;
+    padding: 0 10px;
+  }
+
   .section-toolbar,
   .detail-topline,
   .item-title-row,

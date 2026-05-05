@@ -1,10 +1,9 @@
-const CACHE_NAME = "adamemo-v8";
+const CACHE_NAME = "adamemo-v15";
 const ASSETS = [
   "./",
   "./index.html",
   "./manifest.json",
   "./assets/css/style.css",
-  "./assets/js/mock-data.js",
   "./assets/js/app.js",
   "./assets/icons/icon.svg"
 ];
