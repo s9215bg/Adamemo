@@ -11,6 +11,10 @@
     appId: "1:1091996954122:web:8527c28ebe5e3833b5b9f3",
     measurementId: "G-7CHNL654YN"
   };
+  const TITLE_COLLATOR = new Intl.Collator(["en", "ja", "zh-Hant"], {
+    sensitivity: "base",
+    numeric: true
+  });
 
   const state = {
     items: loadLocalItems(),
@@ -24,6 +28,7 @@
       brass: "",
       percussion: ""
     },
+    filtersOpen: false,
     firebase: null,
     unsubscribe: null
   };
@@ -39,7 +44,11 @@
     todoCount: document.querySelector("#todo-count"),
     listCount: document.querySelector("#list-count"),
     itemList: document.querySelector("#item-list"),
+    filterControls: document.querySelector("#filter-controls"),
     searchInput: document.querySelector("#search-input"),
+    filterToggle: document.querySelector("#filter-toggle"),
+    filterDone: document.querySelector("#filter-done"),
+    filterClear: document.querySelector("#filter-clear"),
     scoreFilters: document.querySelector("#score-filters"),
     newItemButton: document.querySelector("#new-item-button")
   };
@@ -68,6 +77,18 @@
     elements.searchInput.addEventListener("input", (event) => {
       state.search = event.target.value.trim().toLowerCase();
       renderList();
+    });
+
+    elements.filterToggle.addEventListener("click", () => {
+      setScoreFiltersOpen(!state.filtersOpen);
+    });
+
+    elements.filterDone.addEventListener("click", () => {
+      setScoreFiltersOpen(false);
+    });
+
+    elements.filterClear.addEventListener("click", () => {
+      clearScoreFilters();
     });
 
     elements.scoreFilters.addEventListener("change", (event) => {
@@ -136,6 +157,7 @@
     state.selectedId = "";
     state.editing = false;
     state.draftType = "";
+    state.filtersOpen = false;
     elements.searchInput.value = "";
     resetScoreFilters();
     elements.homeView.classList.add("hidden");
@@ -152,6 +174,7 @@
     state.selectedId = "";
     state.editing = false;
     state.draftType = "";
+    state.filtersOpen = false;
     elements.homeView.classList.remove("hidden");
     elements.sectionView.classList.add("hidden");
     elements.backButton.classList.add("hidden");
@@ -177,14 +200,34 @@
     elements.newItemButton.textContent = `新增 ${sectionName}`;
     elements.newItemButton.classList.toggle("hidden", Boolean(state.draftType));
     elements.searchInput.placeholder = state.section === "info" ? "搜尋曲名、作曲家、編曲家、標籤" : "搜尋標題、內容或標籤";
-    elements.scoreFilters.classList.toggle("hidden", state.section !== "info");
+    updateFilterControls();
 
     if (!items.length && !state.draftType) {
       elements.itemList.innerHTML = `<div class="empty-state">目前沒有項目</div>`;
       return;
     }
 
-    elements.itemList.innerHTML = `${items.map(renderItemCard).join("")}${state.draftType ? renderDraftForm() : ""}`;
+    elements.itemList.innerHTML = `${renderItemList(items)}${state.draftType ? renderDraftForm() : ""}`;
+  }
+
+  function renderItemList(items) {
+    if (state.section !== "info") return items.map(renderItemCard).join("");
+
+    let currentInitial = "";
+    return items.map((item) => {
+      const initial = getTitleInitial(item.title);
+      const divider = initial !== currentInitial ? renderInitialDivider(initial) : "";
+      currentInitial = initial;
+      return `${divider}${renderItemCard(item)}`;
+    }).join("");
+  }
+
+  function renderInitialDivider(initial) {
+    return `
+      <div class="initial-divider" aria-label="${escapeAttr(initial)} 開頭">
+        <span>${escapeHtml(initial)}-</span>
+      </div>
+    `;
   }
 
   function renderItemCard(item) {
@@ -704,7 +747,7 @@
       })
       .filter(matchesScoreFilters)
       .sort((a, b) => {
-        if (state.section === "info") return dateValue(b.updatedAt) - dateValue(a.updatedAt);
+        if (state.section === "info") return compareScoreTitles(a, b);
         if (a.status !== b.status) return a.status === "completed" ? 1 : -1;
         return dateValue(a.dueDate) - dateValue(b.dueDate);
       });
@@ -717,6 +760,36 @@
       if (!value) return true;
       return difficulty[key] <= Number(value);
     });
+  }
+
+  function compareScoreTitles(a, b) {
+    const bucketDiff = getTitleBucket(a.title) - getTitleBucket(b.title);
+    if (bucketDiff) return bucketDiff;
+    const titleDiff = TITLE_COLLATOR.compare(getSortableTitle(a.title), getSortableTitle(b.title));
+    if (titleDiff) return titleDiff;
+    return dateValue(a.updatedAt) - dateValue(b.updatedAt);
+  }
+
+  function getSortableTitle(title) {
+    return String(title || "").trim();
+  }
+
+  function getTitleInitial(title) {
+    const sortableTitle = getSortableTitle(title);
+    if (!sortableTitle) return "#";
+    const first = [...sortableTitle][0];
+    if (/^[A-Za-z]$/.test(first)) return first.toLocaleUpperCase();
+    if (/^\d$/.test(first)) return "#";
+    return first;
+  }
+
+  function getTitleBucket(title) {
+    const initial = getTitleInitial(title);
+    if (/^[A-Z]$/.test(initial)) return 0;
+    if (initial === "#") return 1;
+    if (/[\u3040-\u30ff]/.test(initial)) return 2;
+    if (/[\u4e00-\u9fff]/.test(initial)) return 3;
+    return 4;
   }
 
   function getSelectedItem() {
@@ -821,6 +894,33 @@
     elements.scoreFilters.querySelectorAll("select").forEach((select) => {
       select.value = "";
     });
+  }
+
+  function clearScoreFilters() {
+    resetScoreFilters();
+    renderList();
+  }
+
+  function setScoreFiltersOpen(open) {
+    state.filtersOpen = Boolean(open) && state.section === "info";
+    renderList();
+  }
+
+  function hasActiveScoreFilters() {
+    return Object.values(state.scoreFilters).some(Boolean);
+  }
+
+  function updateFilterControls() {
+    const isInfo = state.section === "info";
+    const active = hasActiveScoreFilters();
+    if (!isInfo) state.filtersOpen = false;
+
+    elements.filterControls.classList.toggle("filters-visible", isInfo);
+    elements.filterToggle.classList.toggle("hidden", !isInfo);
+    elements.filterToggle.classList.toggle("active", active);
+    elements.filterToggle.textContent = active ? "篩選中" : "篩選";
+    elements.filterToggle.setAttribute("aria-expanded", String(isInfo && state.filtersOpen));
+    elements.scoreFilters.classList.toggle("hidden", !isInfo || !state.filtersOpen);
   }
 
   function sortTagsByLanguage(tags) {
