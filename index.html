@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-Hant">
   <head>
     <meta charset="UTF-8" />
@@ -11,34 +11,34 @@
   <body>
     <div id="app-shell" class="app-shell home-mode">
       <header class="app-header">
-        <button id="back-button" class="icon-button hidden" type="button" aria-label="返回首頁">←</button>
+        <button id="back-button" class="icon-button hidden" type="button" aria-label="返回">←</button>
         <div class="brand">
           <span class="brand-mark" aria-hidden="true">A</span>
           <div>
             <h1>Adamemo</h1>
-            <p id="sync-status">正在準備同步</p>
+            <p id="sync-status">正在連線 Firebase</p>
           </div>
         </div>
         <div class="header-actions">
           <button id="share-link-button" class="header-action-button hidden" type="button">分享</button>
           <button id="login-button" class="header-action-button" type="button">登入</button>
           <button id="admin-status" class="admin-status hidden" type="button">On</button>
-          <button id="refresh-button" class="icon-button" type="button" aria-label="清除快取並重新整理">↻</button>
+          <button id="refresh-button" class="icon-button" type="button" aria-label="清除快取並重新載入">↻</button>
         </div>
       </header>
 
       <main class="main-panel">
-        <section id="home-view" class="home-view" aria-label="分類入口">
+        <section id="home-view" class="home-view" aria-label="主要入口">
           <button class="entry-card todo-card" data-section="task" type="button">
             <span class="entry-label">To do</span>
             <strong id="todo-count">0</strong>
-            <small>有期限、會推進的待辦</small>
+            <small>整理待辦與期限</small>
           </button>
 
           <button class="entry-card list-card" data-section="info" type="button">
             <span class="entry-label">List</span>
             <strong id="list-count">0</strong>
-            <small>樂譜收納與查詢</small>
+            <small>保存資料與曲目清單</small>
           </button>
         </section>
 
@@ -55,38 +55,38 @@
               <input id="search-input" class="search-input" type="search" placeholder="搜尋標題、內容或標籤" autocomplete="off" />
               <button id="filter-toggle" class="filter-toggle-button hidden" type="button" aria-expanded="false" aria-controls="score-filters">篩選</button>
             </div>
-            <section id="score-filters" class="score-filters hidden" aria-label="樂譜難度篩選">
+            <section id="score-filters" class="score-filters hidden" aria-label="難度篩選">
               <label>
                 <span>木管</span>
                 <select id="filter-woodwind" data-score-filter="woodwind">
                   <option value="">全部</option>
-                  <option value="1">★</option>
-                  <option value="2">★★</option>
-                  <option value="3">★★★</option>
-                  <option value="4">★★★★</option>
-                  <option value="5">★★★★★</option>
+                  <option value="1">1 星</option>
+                  <option value="2">2 星</option>
+                  <option value="3">3 星</option>
+                  <option value="4">4 星</option>
+                  <option value="5">5 星</option>
                 </select>
               </label>
               <label>
                 <span>銅管</span>
                 <select id="filter-brass" data-score-filter="brass">
                   <option value="">全部</option>
-                  <option value="1">★</option>
-                  <option value="2">★★</option>
-                  <option value="3">★★★</option>
-                  <option value="4">★★★★</option>
-                  <option value="5">★★★★★</option>
+                  <option value="1">1 星</option>
+                  <option value="2">2 星</option>
+                  <option value="3">3 星</option>
+                  <option value="4">4 星</option>
+                  <option value="5">5 星</option>
                 </select>
               </label>
               <label>
                 <span>打擊</span>
                 <select id="filter-percussion" data-score-filter="percussion">
                   <option value="">全部</option>
-                  <option value="1">★</option>
-                  <option value="2">★★</option>
-                  <option value="3">★★★</option>
-                  <option value="4">★★★★</option>
-                  <option value="5">★★★★★</option>
+                  <option value="1">1 星</option>
+                  <option value="2">2 星</option>
+                  <option value="3">3 星</option>
+                  <option value="4">4 星</option>
+                  <option value="5">5 星</option>
                 </select>
               </label>
               <div class="filter-actions">
@@ -102,12 +102,12 @@
       <div id="login-panel" class="login-panel hidden" role="dialog" aria-modal="true" aria-labelledby="login-title">
         <form id="login-form" class="login-card">
           <div class="login-card-header">
-            <h2 id="login-title">登入</h2>
+            <h2 id="login-title">管理員登入</h2>
             <button id="login-close-button" class="icon-button" type="button" aria-label="關閉登入">×</button>
           </div>
           <label class="field">
-            <span>6 位數字密碼</span>
-            <input id="login-passcode" name="passcode" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" enterkeyhint="done" />
+            <span>管理員密碼</span>
+            <input id="login-passcode" name="password" type="password" autocomplete="current-password" enterkeyhint="done" />
           </label>
           <p id="login-message" class="login-message" aria-live="polite"></p>
           <button id="login-submit-button" class="primary-button" type="submit">登入</button>

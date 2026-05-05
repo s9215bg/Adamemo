@@ -2,12 +2,16 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email == "s9215bg@gmail.com";
+    }
+
     match /items/{itemId} {
-      // Public visitors can read shared content, but writes must not be
-      // trusted from the browser. Add Firebase Auth or a backend write path
-      // before enabling edits again.
+      // Public visitors can read shared content. Only the configured
+      // Firebase Auth admin can create, edit, or delete items.
       allow read: if true;
-      allow write: if false;
+      allow write: if isAdmin();
     }
 
     match /settings/admin {

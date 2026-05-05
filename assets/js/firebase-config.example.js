@@ -5,5 +5,6 @@ window.ADAMEMO_FIREBASE_CONFIG = {
   storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
   messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
   appId: "YOUR_FIREBASE_APP_ID",
-  measurementId: "YOUR_MEASUREMENT_ID"
+  measurementId: "YOUR_MEASUREMENT_ID",
+  adminEmail: "YOUR_FIREBASE_AUTH_ADMIN_EMAIL"
 };

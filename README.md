@@ -1,65 +1,80 @@
 # Adamemo
 
-簡潔的待辦與清單工具。首頁只有兩張入口卡片：`To do` 與 `List`，點入後才顯示對應項目。
+Adamemo 是一個簡潔的待辦與清單工具。首頁提供兩個入口：
 
-## 溝通與介面規則
+- `To do`：管理待辦事項、期限、狀態與標籤。
+- `List`：整理曲目、連結、作曲者、編曲者與難度資訊。
 
-- `主頁面`：只指進入 App 後看到的兩張大卡頁面，兩張卡片為 `To do` 與 `List`。
-- 主頁面不顯示任何項目細節框，也不顯示「點擊卡片後會顯示細節」之類的提示區。
-- 主頁面不可捲動，兩張大卡需固定在第一視窗內。
-- 主頁面視覺規則：`To do` 主卡使用黃色系，`List` 主卡使用藍色系，卡片文字使用白色。
-- 點擊 `To do` 後進入 `To do列表頁`；點擊 `List` 後進入 `List列表頁`。
-- `列表頁` 只顯示該分類的項目、搜尋欄與新增按鈕，並使用與主卡相近的色彩搭配。
-- 列表頁的新增按鈕不可放在頁面上方，避免誤觸；目前放在列表底部。
-- 點擊列表頁的 `新增` 只會打開草稿表單並聚焦標題欄位，不會立刻建立項目；必須按 `完成` 後才算新增。
-- 草稿表單開啟時，列表頁底部的 `新增` 按鈕必須消失，避免輸入到一半誤觸造成資料被清除或流程中斷。
-- 草稿表單與編輯表單的 `取消`、`完成` 按鈕放在表單下方，不放在表單上方。
-- 點擊列表中的卡片時，細節要在該卡片下方展開，不使用獨立側欄或固定細節框。
-- 細節展開後預設為唯讀，必須按 `編輯` 才能修改。
-- 編輯狀態中按 `完成` 才會儲存；刪除按鈕只在編輯狀態中顯示，降低誤刪風險。
-- `To do` 項目可設定期限與狀態；設定期限的項目，卡片要用由右往左填滿的進度條呈現期限逼近感。
-- `List` 是獨立的樂譜資料庫，不是一般備忘錄，呈現邏輯和 `To do` 完全不同。它用來列出我了解、擁有或可查詢的樂譜，方便未來找曲子使用。
-- `List列表頁` 的每一列只顯示兩行：第一行是曲名，字體較大且清楚；第二行是 composer / arranger，字體較小且灰色，例如 `Intenso Michael Sacks / arr. John Bobby`。
-- `List列表頁` 的列表列不顯示難度、標籤、備註或 URL；這些資料只在點開後查看。
-- `List` 項目以曲名作為標題；每個樂譜單位至少要能記錄 `composer`、`arranger`、`url`，分別代表作曲家、編曲家、我擁有的樂譜電子檔連結。
-- `List` 項目要能編輯 `木管`、`銅管`、`打擊` 三個聲部的難度，難度為 1-5 顆星。
-- `List列表頁` 要提供木管、銅管、打擊能力篩選。篩選邏輯是：選擇某聲部能力星數後，只顯示該聲部難度小於或等於該能力的曲子。
-- `List` 項目不使用期限，也不使用進行中或完成狀態；點擊後直接展開所儲存的樂譜資料。
-- 標籤不可用逗號一次輸入多筆，必須用 `+` 逐一新增，避免一個標籤填錯造成一整串資料壞掉。
-- 標籤新增區的輸入欄要和 `+` 貼在一起，輸入欄寬度維持約 10 個中文字。
-- 已新增的標籤要讓文字和 `x` 共用同一個外框；點擊該標籤內的 `x` 才移除標籤。
-- 標籤儲存與顯示時要去重並排序。排序先分語言群組：中文、英文、日文，最後才是其他；每個群組內依首字排序。
-- `List` 項目的 URL 欄位與顯示旁要提供複製按鈕，點擊後複製該樂譜連結。
-- 手機填寫欄位時不可觸發畫面縮放；輸入欄位字級需維持至少 16px，viewport 也限制縮放。
+## 功能
 
-## 目前包含
+- Firebase Firestore 即時同步資料。
+- 本機 `localStorage` 作為離線或同步失敗時的備援。
+- GitHub Pages 部署。
+- Firebase Auth 管理員登入後可新增、編輯、刪除資料。
+- 一般訪客可讀取公開資料，但不能寫入 Firestore。
+- PWA 支援，包含 `manifest.json` 與 `service-worker.js`。
 
-- Firebase Firestore 同步，載入失敗時自動使用 `localStorage`
-- To do / List 雙分類，其中 List 是樂譜收納管理
-- To do 項目期限進度條，時間越接近會由右往左填滿
-- List 樂譜欄位：曲名、composer、arranger、url、木管/銅管/打擊難度
-- List列表列僅顯示曲名與 composer / arranger，難度需點開後查看
-- List列表頁可依木管、銅管、打擊能力星數篩選適合的曲子
-- 標籤以 `+` 單筆新增，並依中文、英文、日文分組排序
-- 點擊項目後在該卡片下方展開唯讀細節
-- 按 `編輯` 才可修改，編輯中按 `完成` 會儲存
-- PWA 基礎：`manifest.json` 與 `service-worker.js`
+## 本機執行
 
-## 使用方式
-
-建議用本機伺服器開啟，讓 Firebase module 與 service worker 都能正常運作：
+由於專案使用 Firebase module 與 service worker，建議用本機伺服器開啟：
 
 ```bash
 python -m http.server 8080
 ```
 
-接著開啟 `http://localhost:8080`。
+然後打開：
 
-Firestore collection 名稱為 `items`。目前使用的是 Cloud Firestore，不是 Firebase Realtime Database。
+```text
+http://localhost:8080
+```
 
-## Firebase 同步檢查
+## Firebase 設定
 
-- App 左上角狀態若顯示 `已連線 Firestore`，代表正在使用 Firebase 同步。
-- 若顯示 `Firestore 讀取失敗`、`Firestore 寫入失敗` 或 `權限不足`，資料會留在該裝置的 `localStorage`，不同裝置不會互通。
-- Firebase Console 需要建立 Cloud Firestore database，並確認 Rules 允許目前 App 讀寫 `items` collection。
-- 開發測試階段可暫時使用寬鬆規則，但正式使用前應改成需要登入的安全規則。
+本機需要建立：
+
+```text
+assets/js/firebase-config.js
+```
+
+可以參考：
+
+```text
+assets/js/firebase-config.example.js
+```
+
+`firebase-config.js` 會被 `.gitignore` 排除，不應上傳到 GitHub repository。
+
+## GitHub Pages 部署
+
+正式部署使用 GitHub Actions：
+
+```text
+.github/workflows/deploy-pages.yml
+```
+
+需要在 GitHub repository 的 `Settings > Secrets and variables > Actions` 建立以下 Secrets：
+
+```text
+FIREBASE_API_KEY
+FIREBASE_AUTH_DOMAIN
+FIREBASE_PROJECT_ID
+FIREBASE_STORAGE_BUCKET
+FIREBASE_MESSAGING_SENDER_ID
+FIREBASE_APP_ID
+FIREBASE_MEASUREMENT_ID
+FIREBASE_ADMIN_EMAIL
+```
+
+部署時 workflow 會從 Secrets 產生 `assets/js/firebase-config.js`，但該檔案不會保存在 repository 原始碼中。
+
+## Firestore Rules
+
+目前規則允許所有訪客讀取 `items`，但只有指定 Firebase Auth 管理員 email 可以寫入。
+
+更新管理員 email 後，請到 Firebase Console 的 Firestore Rules 頁面發布 `firestore.rules`。
+
+## 安全提醒
+
+- 不要把 `assets/js/firebase-config.js` 上傳到 GitHub。
+- Firebase Web API key 會出現在前端成品中，這是正常情況。
+- 真正保護資料的是 Firestore Rules、Firebase Auth 與 API key referrer 限制。

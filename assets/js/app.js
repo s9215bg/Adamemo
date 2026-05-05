@@ -1,9 +1,7 @@
-(function () {
+﻿(function () {
   const STORAGE_KEY = "adamemo-items";
   const SEEDED_KEY = "adamemo-firestore-seeded";
   const ADMIN_SESSION_KEY = "adamemo-admin-session";
-  const ADMIN_SETTINGS_COLLECTION = "settings";
-  const ADMIN_SETTINGS_DOC = "admin";
   const DRAFT_ID = "__draft__";
   const FIREBASE_CONFIG = window.ADAMEMO_FIREBASE_CONFIG || null;
   const TITLE_COLLATOR = new Intl.Collator(["en", "ja", "zh-Hant"], {
@@ -18,7 +16,7 @@
     search: "",
     editing: false,
     draftType: "",
-    admin: loadAdminSession(),
+    admin: false,
     shareMode: isShareMode(),
     scoreFilters: {
       woodwind: "",
@@ -144,12 +142,14 @@
     }
 
     try {
-      const [{ initializeApp }, firestore] = await Promise.all([
+      const [{ initializeApp }, firestore, auth] = await Promise.all([
         import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js"),
-        import("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js")
+        import("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js"),
+        import("https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js")
       ]);
 
       const app = initializeApp(FIREBASE_CONFIG);
+      const authClient = auth.getAuth(app);
       import("https://www.gstatic.com/firebasejs/10.12.5/firebase-analytics.js")
         .then(({ getAnalytics, isSupported }) => {
           isSupported().then((supported) => {
@@ -160,9 +160,14 @@
 
       const db = firestore.getFirestore(app);
       const collectionRef = firestore.collection(db, "items");
-      const adminSettingsRef = firestore.doc(db, ADMIN_SETTINGS_COLLECTION, ADMIN_SETTINGS_DOC);
-      state.firebase = { db, collectionRef, adminSettingsRef, firestore };
-      setSyncStatus("Firebase 同步中");
+      state.firebase = { db, collectionRef, firestore, auth: { ...auth, client: authClient } };
+      auth.onAuthStateChanged(authClient, (user) => {
+        state.admin = isAdminUser(user);
+        if (state.admin) localStorage.setItem(ADMIN_SESSION_KEY, "true");
+        else localStorage.removeItem(ADMIN_SESSION_KEY);
+        render();
+      });
+      setSyncStatus("Firebase 已連線");
 
       state.unsubscribe = firestore.onSnapshot(
         collectionRef,
@@ -181,7 +186,7 @@
 
           state.items = remoteItems.length ? remoteItems : state.items;
           saveLocalItems();
-          setSyncStatus("已連線 Firestore");
+          setSyncStatus("已同步 Firestore");
           render();
         },
         (error) => {
@@ -270,7 +275,7 @@
     elements.sectionSummary.textContent = `${items.length} 個項目`;
     elements.newItemButton.textContent = `新增 ${sectionName}`;
     elements.newItemButton.classList.toggle("hidden", Boolean(state.draftType) || !canEdit());
-    elements.searchInput.placeholder = state.section === "info" ? "搜尋曲名、作曲家、編曲家、標籤" : "搜尋標題、內容或標籤";
+    elements.searchInput.placeholder = state.section === "info" ? "搜尋標題、作曲者、編曲者或標籤" : "搜尋標題、內容或標籤";
     updateFilterControls();
 
     if (!items.length && !state.draftType) {
@@ -295,7 +300,7 @@
 
   function renderInitialDivider(initial) {
     return `
-      <div class="initial-divider" aria-label="${escapeAttr(initial)} 開頭">
+      <div class="initial-divider" aria-label="${escapeAttr(initial)} 分組">
         <span>${escapeHtml(initial)}-</span>
       </div>
     `;
@@ -305,7 +310,7 @@
     const isTask = item.type === "task";
     const progress = isTask ? getDueProgress(item) : 0;
     const progressStyle = isTask && item.dueDate ? ` style="transform: scaleX(${progress});"` : "";
-    const dueText = item.dueDate ? formatDate(item.dueDate) : "無期限";
+    const dueText = item.dueDate ? formatDate(item.dueDate) : "未設定";
     const tags = sortTagsByLanguage(item.tags).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("");
     const scoreMeta = isTask ? "" : renderScoreListMeta(item);
     const active = item.id === state.selectedId ? " active" : "";
@@ -333,7 +338,7 @@
   }
 
   function renderScoreListMeta(item) {
-    const composer = item.composer ? escapeHtml(item.composer) : "未填作曲";
+    const composer = item.composer ? escapeHtml(item.composer) : "未填作曲者";
     const arranger = item.arranger ? ` / arr. ${escapeHtml(item.arranger)}` : "";
     return `
       <div class="score-list-meta">
@@ -376,7 +381,7 @@
           ${isTask ? `
             <div class="field-grid">
               <label class="field">
-                <span>期限</span>
+                <span>日期</span>
                 <input name="dueDate" type="datetime-local" value="${escapeAttr(toDateTimeInput(item.dueDate))}" />
               </label>
               <label class="field">
@@ -394,13 +399,13 @@
           ${renderTagEditor(item.tags)}
 
           <label class="field">
-            <span>${isTask ? "內容" : "備註 / 收納資料"}</span>
+            <span>${isTask ? "內容" : "曲目資訊 / 備註"}</span>
             <textarea name="content" rows="${isTask ? 8 : 12}">${escapeHtml(item.content)}</textarea>
           </label>
 
           <div class="detail-actions bottom-actions">
             <button class="secondary-button" data-action="cancel-edit" data-id="${escapeAttr(item.id)}" type="button">取消</button>
-            <button class="primary-button" type="submit">完成</button>
+            <button class="primary-button" type="submit">儲存</button>
           </div>
         </form>
       `;
@@ -418,7 +423,7 @@
         <h2>${escapeHtml(item.title)}</h2>
         ${isTask ? `
           <dl>
-            <div><dt>期限</dt><dd>${escapeHtml(item.dueDate ? formatDate(item.dueDate) : "無期限")}</dd></div>
+            <div><dt>日期</dt><dd>${escapeHtml(item.dueDate ? formatDate(item.dueDate) : "未設定")}</dd></div>
             <div><dt>狀態</dt><dd>${item.status === "completed" ? "已完成" : "進行中"}</dd></div>
           </dl>
         ` : renderScoreReadonlyFields(item)}
@@ -433,17 +438,17 @@
     return `
       <div class="field-grid">
         <label class="field">
-          <span>Composer 作曲家</span>
+          <span>Composer 作曲者</span>
           <input name="composer" value="${escapeAttr(item.composer || "")}" />
         </label>
         <label class="field">
-          <span>Arranger 編曲家</span>
+          <span>Arranger 編曲者</span>
           <input name="arranger" value="${escapeAttr(item.arranger || "")}" />
         </label>
       </div>
 
       <label class="field">
-        <span>URL 樂譜電子檔連結</span>
+        <span>URL 連結</span>
         <div class="url-input-row">
           <input name="url" type="url" inputmode="url" value="${escapeAttr(item.url || "")}" />
           <button class="secondary-button copy-url-button" data-action="copy-url-input" type="button">複製</button>
@@ -460,12 +465,12 @@
 
   function renderScoreReadonlyFields(item) {
     const url = item.url
-      ? `<span class="url-value"><a href="${escapeAttr(item.url)}" target="_blank" rel="noopener">開啟樂譜連結</a><button class="secondary-button copy-url-button" data-action="copy-url" data-url="${escapeAttr(item.url)}" type="button">複製</button></span>`
-      : "未填寫";
+      ? `<span class="url-value"><a href="${escapeAttr(item.url)}" target="_blank" rel="noopener">開啟連結</a><button class="secondary-button copy-url-button" data-action="copy-url" data-url="${escapeAttr(item.url)}" type="button">複製</button></span>`
+      : "未提供";
     return `
       <dl>
-        <div><dt>Composer</dt><dd>${escapeHtml(item.composer || "未填寫")}</dd></div>
-        <div><dt>Arranger</dt><dd>${escapeHtml(item.arranger || "未填寫")}</dd></div>
+        <div><dt>Composer</dt><dd>${escapeHtml(item.composer || "未提供")}</dd></div>
+        <div><dt>Arranger</dt><dd>${escapeHtml(item.arranger || "未提供")}</dd></div>
         <div><dt>URL</dt><dd>${url}</dd></div>
       </dl>
       ${renderDifficultyBadges(item)}
@@ -496,13 +501,13 @@
 
           <label class="field">
             <span>標題</span>
-            <input name="title" placeholder="${isTask ? "待辦標題" : "曲名"}" required />
+            <input name="title" placeholder="${isTask ? "待辦標題" : "曲目標題"}" required />
           </label>
 
           ${isTask ? `
             <div class="field-grid">
               <label class="field">
-                <span>期限</span>
+                <span>日期</span>
                 <input name="dueDate" type="datetime-local" value="${escapeAttr(defaultDue)}" />
               </label>
               <label class="field">
@@ -518,13 +523,13 @@
           ${renderTagEditor([])}
 
           <label class="field">
-            <span>${isTask ? "內容" : "備註 / 收納資料"}</span>
+            <span>${isTask ? "內容" : "曲目資訊 / 備註"}</span>
             <textarea name="content" rows="${isTask ? 7 : 12}"></textarea>
           </label>
 
           <div class="detail-actions bottom-actions">
             <button class="secondary-button" data-action="cancel-draft" type="button">取消</button>
-            <button class="primary-button" type="submit">完成</button>
+            <button class="primary-button" type="submit">儲存</button>
           </div>
         </form>
       </article>
@@ -710,7 +715,7 @@
           ${sortedTags.map(renderEditableTag).join("")}
         </div>
         <div class="tag-input-row">
-          <input data-tag-input type="text" placeholder="新增單一標籤" />
+          <input data-tag-input type="text" placeholder="新增標籤" />
           <button class="secondary-button tag-add-button" data-action="add-tag" type="button" aria-label="新增標籤">+</button>
         </div>
       </section>
@@ -721,7 +726,7 @@
     return `
       <span class="tag-chip-edit" data-tag-value="${escapeAttr(tag)}">
         ${escapeHtml(tag)}
-        <button data-action="remove-tag" type="button" aria-label="移除 ${escapeAttr(tag)}">×</button>
+        <button data-action="remove-tag" type="button" aria-label="蝘駁 ${escapeAttr(tag)}">?</button>
       </span>
     `;
   }
@@ -787,7 +792,7 @@
   function openLoginPanel() {
     if (state.shareMode) return;
     if (!elements.loginPanel || !elements.loginPasscode) {
-      window.alert("登入面板尚未更新，請按重新整理清除快取。");
+      window.alert("登入介面尚未載入，請重新整理後再試。");
       return;
     }
     elements.loginPanel.classList.remove("hidden");
@@ -817,7 +822,7 @@
   }
 
   function normalizePasscodeInput() {
-    elements.loginPasscode.value = elements.loginPasscode.value.replace(/\D/g, "").slice(0, 6);
+    elements.loginPasscode.value = elements.loginPasscode.value.trimStart();
   }
 
   function handleLoginSubmitButton(event) {
@@ -839,50 +844,44 @@
   async function submitLogin() {
     if (elements.loginSubmitButton.disabled) return;
     if (state.shareMode) return;
-    if (!state.firebase) {
-      setLoginMessage("Firebase 尚未連線，請稍後再試。");
-      return;
-    }
-    const passcode = elements.loginPasscode.value.trim();
-    if (!/^\d{6}$/.test(passcode)) {
-      setLoginMessage("請輸入 6 位數字。");
+    if (!state.firebase?.auth) {
+      setLoginMessage("Firebase Auth 尚未連線。");
       return;
     }
 
-    let passcodeHash = "";
+    const adminEmail = String(FIREBASE_CONFIG.adminEmail || "").trim();
+    const password = elements.loginPasscode.value;
+    if (!adminEmail) {
+      setLoginMessage("Firebase config missing adminEmail.");
+      return;
+    }
+    if (!password.trim()) {
+      setLoginMessage("請輸入管理員密碼。");
+      return;
+    }
+
     try {
-      setLoginBusy(true, "正在讀取密碼設定...");
-      passcodeHash = await withTimeout(loadAdminPasscodeHash(), 8000, "讀取 Firebase 逾時，請確認手機網路。");
+      setLoginBusy(true, "登入中...");
+      const { auth } = state.firebase;
+      const result = await withTimeout(
+        auth.signInWithEmailAndPassword(auth.client, adminEmail, password),
+        10000,
+        "Firebase Auth 登入逾時。"
+      );
+      if (!isAdminUser(result.user)) {
+        await auth.signOut(auth.client);
+        setLoginBusy(false, "這個帳號不是允許的管理員。");
+        return;
+      }
+      state.admin = true;
+      localStorage.setItem(ADMIN_SESSION_KEY, "true");
+      setLoginBusy(false, "");
+      closeLoginPanel();
+      render();
     } catch (error) {
-      setLoginBusy(false, error.message || "無法讀取 Firebase 密碼設定。");
-      return;
+      setLoginBusy(false, getFirebaseErrorText(error));
     }
-
-    if (!passcodeHash) {
-      setLoginBusy(false, "尚未在 Firebase 建立密碼設定。");
-      return;
-    }
-
-    let inputHash = "";
-    try {
-      setLoginBusy(true, "正在驗證...");
-      inputHash = await withTimeout(sha256Hex(passcode), 8000, "手機無法完成密碼驗證。");
-    } catch (error) {
-      setLoginBusy(false, error.message || "手機無法完成密碼驗證。");
-      return;
-    }
-
-    if (inputHash !== passcodeHash) {
-      setLoginBusy(false, "密碼錯誤。");
-      return;
-    }
-    state.admin = true;
-    localStorage.setItem(ADMIN_SESSION_KEY, "true");
-    setLoginBusy(false, "");
-    closeLoginPanel();
-    render();
   }
-
   function setLoginMessage(message) {
     elements.loginMessage.textContent = message;
   }
@@ -890,7 +889,7 @@
   function setLoginBusy(busy, message) {
     elements.loginSubmitButton.disabled = busy;
     elements.loginPasscode.disabled = busy;
-    elements.loginSubmitButton.textContent = busy ? "驗證中" : "登入";
+    elements.loginSubmitButton.textContent = busy ? "登入中..." : "登入";
     setLoginMessage(message);
   }
 
@@ -902,9 +901,16 @@
     return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timer));
   }
 
-  function handleLogout() {
-    const ok = window.confirm("要登出並關閉編輯權嗎？");
+  async function handleLogout() {
+    const ok = window.confirm("確定要登出管理模式嗎？");
     if (!ok) return;
+    if (state.firebase?.auth) {
+      try {
+        await state.firebase.auth.signOut(state.firebase.auth.client);
+      } catch (error) {
+        setSyncStatus(getFirebaseErrorText(error));
+      }
+    }
     state.admin = false;
     state.editing = false;
     state.draftType = "";
@@ -912,11 +918,9 @@
     render();
   }
 
-  async function loadAdminPasscodeHash() {
-    const snapshot = await state.firebase.firestore.getDoc(state.firebase.adminSettingsRef);
-    if (!snapshot.exists()) return "";
-    const data = snapshot.data() || {};
-    return String(data.passcodeHash || "").trim().toLowerCase();
+  function isAdminUser(user) {
+    const adminEmail = String(FIREBASE_CONFIG?.adminEmail || "").trim().toLowerCase();
+    return Boolean(user?.email && adminEmail && user.email.toLowerCase() === adminEmail);
   }
 
   async function sha256Hex(text) {
@@ -1004,7 +1008,7 @@
   }
 
   async function clearCachesAndReload() {
-    const ok = window.confirm("確定要清除快取並重新整理嗎？資料和登入狀態會保留。");
+    const ok = window.confirm("確定要清除快取並重新載入嗎？");
     if (!ok) return;
     try {
       if (window.caches) {
@@ -1015,9 +1019,9 @@
         const registrations = await navigator.serviceWorker.getRegistrations();
         await Promise.all(registrations.map((registration) => registration.unregister()));
       }
-      setSyncStatus("快取已清除，重新整理中");
+      setSyncStatus("快取已清除，正在重新載入");
     } catch (error) {
-      setSyncStatus("快取清除不完整，仍會重新整理");
+      setSyncStatus("快取清除失敗，請重新整理頁面");
     }
     window.location.reload();
   }
@@ -1203,7 +1207,7 @@
 
   function requireAdmin() {
     if (state.shareMode) return;
-    window.alert("請先登入後再編輯。");
+    window.alert("請先登入管理員帳號。");
   }
 
   function hasStoredLocalItems() {
@@ -1372,9 +1376,9 @@
   function getFirebaseErrorText(error) {
     const code = error?.code ? String(error.code) : "";
     const message = error?.message ? String(error.message) : "未知錯誤";
-    if (code === "permission-denied") return "權限不足，請檢查 Firestore Rules";
-    if (code === "unavailable") return "服務暫時無法連線";
-    return code ? `${code}，${message}` : message;
+    if (code === "permission-denied") return "權限不足，請確認 Firestore Rules";
+    if (code === "unavailable") return "網路連線暫時不可用";
+    return code ? `${code}: ${message}` : message;
   }
 
   function registerServiceWorker() {
@@ -1383,3 +1387,4 @@
     }
   }
 })();
+
