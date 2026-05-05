@@ -5,15 +5,7 @@
   const ADMIN_SETTINGS_COLLECTION = "settings";
   const ADMIN_SETTINGS_DOC = "admin";
   const DRAFT_ID = "__draft__";
-  const FIREBASE_CONFIG = {
-    apiKey: "AIzaSyDFA5r_Jaz8NhehGo3UjgF8vw2S_WR9Zl4",
-    authDomain: "adamemo-0623.firebaseapp.com",
-    projectId: "adamemo-0623",
-    storageBucket: "adamemo-0623.firebasestorage.app",
-    messagingSenderId: "1091996954122",
-    appId: "1:1091996954122:web:8527c28ebe5e3833b5b9f3",
-    measurementId: "G-7CHNL654YN"
-  };
+  const FIREBASE_CONFIG = window.ADAMEMO_FIREBASE_CONFIG || null;
   const TITLE_COLLATOR = new Intl.Collator(["en", "ja", "zh-Hant"], {
     sensitivity: "base",
     numeric: true
@@ -146,6 +138,11 @@
   }
 
   async function connectFirebase() {
+    if (!FIREBASE_CONFIG) {
+      setSyncStatus("Firebase config missing");
+      return;
+    }
+
     try {
       const [{ initializeApp }, firestore] = await Promise.all([
         import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js"),
