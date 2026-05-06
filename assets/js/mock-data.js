@@ -20,6 +20,7 @@ window.ADAMEMO_MOCK_ITEMS = [
     composer: "James Swearingen",
     arranger: "",
     url: "https://example.com/blue-ridge-saga.pdf",
+    overallLevel: 2.5,
     difficulty: {
       woodwind: 2,
       brass: 2,

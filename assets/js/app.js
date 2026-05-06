@@ -8,6 +8,8 @@
     sensitivity: "base",
     numeric: true
   });
+  const WHOLE_SCORE_LEVELS = [1, 2, 3, 4, 5];
+  const TOTAL_SCORE_LEVELS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
 
   const state = {
     items: loadLocalItems(),
@@ -19,10 +21,12 @@
     admin: false,
     shareMode: isShareMode(),
     scoreFilters: {
+      overall: "",
       woodwind: "",
       brass: "",
       percussion: ""
     },
+    infoSortMode: "initial",
     filtersOpen: false,
     firebase: null,
     unsubscribe: null
@@ -222,6 +226,7 @@
     state.selectedId = "";
     state.editing = false;
     state.draftType = "";
+    state.infoSortMode = "initial";
     state.filtersOpen = false;
     elements.searchInput.value = "";
     resetScoreFilters();
@@ -284,26 +289,80 @@
     }
 
     elements.itemList.innerHTML = `${renderItemList(items)}${state.draftType ? renderDraftForm() : ""}`;
+    scheduleInfoTitleFit();
   }
 
   function renderItemList(items) {
     if (state.section !== "info") return items.map(renderItemCard).join("");
 
+    let hasRenderedSortSwitch = false;
+    if (state.infoSortMode === "overall") {
+      let currentLevel = "";
+      return items.map((item) => {
+        const level = formatLevel(getOverallLevel(item));
+        const initial = getTitleInitial(item.title);
+        const isNewGroup = level !== currentLevel;
+        const divider = isNewGroup
+          ? renderLevelDivider(level, !hasRenderedSortSwitch, initial)
+          : "";
+        if (isNewGroup) hasRenderedSortSwitch = true;
+        currentLevel = level;
+        return `${divider}${renderItemCard(item)}`;
+      }).join("");
+    }
+
     let currentInitial = "";
     return items.map((item) => {
       const initial = getTitleInitial(item.title);
-      const divider = initial !== currentInitial ? renderInitialDivider(initial) : "";
+      const isNewGroup = initial !== currentInitial;
+      const divider = isNewGroup
+        ? renderInitialDivider(initial, !hasRenderedSortSwitch)
+        : "";
+      if (isNewGroup) hasRenderedSortSwitch = true;
       currentInitial = initial;
       return `${divider}${renderItemCard(item)}`;
     }).join("");
   }
 
-  function renderInitialDivider(initial) {
+  function renderInitialDivider(initial, withSortSwitch = false) {
+    if (withSortSwitch) return renderSortSwitchDivider("initial", initial);
     return `
       <div class="initial-divider" aria-label="${escapeAttr(initial)} 分組">
         <span>${escapeHtml(initial)}-</span>
       </div>
     `;
+  }
+
+  function renderLevelDivider(level, withSortSwitch = false, initial = "") {
+    if (withSortSwitch) return renderSortSwitchDivider("overall", level, initial);
+    return `
+      <div class="initial-divider level-divider" aria-label="總級數 ${escapeAttr(level)} 分組">
+        <span>${escapeHtml(level)}</span>
+      </div>
+    `;
+  }
+
+  function renderSortSwitchDivider(mode, value, initial = "") {
+    const isInitial = mode === "initial";
+    const left = isInitial
+      ? renderSortPill(value, "initial", true)
+      : renderSortPill(initial || "字首", "initial", false);
+    const right = isInitial
+      ? renderSortPill("級數", "overall", false)
+      : renderSortPill(value, "overall", true);
+    return `
+      <div class="initial-divider sort-switch-divider" aria-label="排列切換">
+        ${left}
+        <span class="divider-line" aria-hidden="true"></span>
+        ${right}
+      </div>
+    `;
+  }
+
+  function renderSortPill(label, mode, active) {
+    const className = `sort-pill ${active ? `active ${mode}` : "inactive"}`;
+    const action = active ? "" : ` data-action="set-info-sort" data-sort-mode="${escapeAttr(mode)}"`;
+    return `<button class="${className}"${action} type="button" aria-pressed="${active}">${escapeHtml(label)}</button>`;
   }
 
   function renderItemCard(item) {
@@ -313,6 +372,7 @@
     const dueText = item.dueDate ? formatDate(item.dueDate) : "未設定";
     const tags = sortTagsByLanguage(item.tags).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("");
     const scoreMeta = isTask ? "" : renderScoreListMeta(item);
+    const overallBadge = isTask ? "" : renderOverallLevelBadge(item);
     const active = item.id === state.selectedId ? " active" : "";
     const completed = isTask && item.status === "completed" ? " completed" : "";
     const urgent = isTask && progress >= 0.8 && item.status !== "completed" ? " urgent" : "";
@@ -324,9 +384,10 @@
           ${isTask ? `<span class="time-bar"${progressStyle}></span>` : ""}
           <div class="item-card-content">
             <div class="item-title-row">
-              <h3>${escapeHtml(item.title)}</h3>
+              <h3${isTask ? "" : " data-fit-title"}>${escapeHtml(item.title)}</h3>
               ${isTask ? `<span class="due-label">${escapeHtml(dueText)}</span>` : ""}
             </div>
+            ${overallBadge}
             ${isTask ? `<p>${escapeHtml(item.content || "沒有內容")}</p>` : ""}
             ${scoreMeta}
             ${isTask ? `<div class="item-tags">${tags}</div>` : ""}
@@ -338,13 +399,17 @@
   }
 
   function renderScoreListMeta(item) {
-    const composer = item.composer ? escapeHtml(item.composer) : "未填作曲者";
-    const arranger = item.arranger ? ` / arr. ${escapeHtml(item.arranger)}` : "";
+    const rawCredits = `${item.composer || "未填作曲者"}${item.arranger ? ` / arr. ${item.arranger}` : ""}`;
+    const credits = escapeHtml(rawCredits);
     return `
       <div class="score-list-meta">
-        <span>${composer}${arranger}</span>
+        <span title="${escapeAttr(rawCredits)}">${credits}</span>
       </div>
     `;
+  }
+
+  function renderOverallLevelBadge(item) {
+    return `<strong class="overall-level-badge">${escapeHtml(formatLevel(getOverallLevel(item)))}</strong>`;
   }
 
   function renderDifficultyBadges(item) {
@@ -435,6 +500,7 @@
 
   function renderScoreEditorFields(item) {
     const difficulty = getScoreDifficulty(item);
+    const overallLevel = getOverallLevel(item);
     return `
       <div class="field-grid">
         <label class="field">
@@ -455,7 +521,8 @@
         </div>
       </label>
 
-      <div class="field-grid three">
+      <div class="field-grid four">
+        ${renderOverallLevelSelect(overallLevel)}
         ${renderDifficultySelect("woodwind", "木管難度", difficulty.woodwind)}
         ${renderDifficultySelect("brass", "銅管難度", difficulty.brass)}
         ${renderDifficultySelect("percussion", "打擊難度", difficulty.percussion)}
@@ -471,9 +538,21 @@
       <dl>
         <div><dt>Composer</dt><dd>${escapeHtml(item.composer || "未提供")}</dd></div>
         <div><dt>Arranger</dt><dd>${escapeHtml(item.arranger || "未提供")}</dd></div>
+        <div><dt>總級數</dt><dd>${escapeHtml(formatLevel(getOverallLevel(item)))}</dd></div>
         <div><dt>URL</dt><dd>${url}</dd></div>
       </dl>
       ${renderDifficultyBadges(item)}
+    `;
+  }
+
+  function renderOverallLevelSelect(value) {
+    return `
+      <label class="field">
+        <span>總級數</span>
+        <select name="overallLevel">
+          ${renderLevelOptions(TOTAL_SCORE_LEVELS, value)}
+        </select>
+      </label>
     `;
   }
 
@@ -482,10 +561,18 @@
       <label class="field">
         <span>${label}</span>
         <select name="${name}">
-          ${[1, 2, 3, 4, 5].map((level) => `<option value="${level}"${Number(value) === level ? " selected" : ""}>${level} 星</option>`).join("")}
+          ${renderLevelOptions(WHOLE_SCORE_LEVELS, value)}
         </select>
       </label>
     `;
+  }
+
+  function renderLevelOptions(levels, value) {
+    return levels.map((level) => {
+      const levelValue = formatLevel(level);
+      const selected = Number(value) === level ? " selected" : "";
+      return `<option value="${levelValue}"${selected}>${renderLevelStars(level)}</option>`;
+    }).join("");
   }
 
   function renderDraftForm() {
@@ -552,6 +639,12 @@
       state.editing = false;
       state.draftType = "";
       render();
+      return;
+    }
+
+    if (action === "set-info-sort") {
+      state.infoSortMode = actionElement.dataset.sortMode === "overall" ? "overall" : "initial";
+      renderList();
       return;
     }
 
@@ -664,6 +757,7 @@
       item.composer = String(formData.get("composer") || "").trim();
       item.arranger = String(formData.get("arranger") || "").trim();
       item.url = String(formData.get("url") || "").trim();
+      item.overallLevel = toOverallLevel(formData.get("overallLevel"));
       item.difficulty = {
         woodwind: toDifficulty(formData.get("woodwind")),
         brass: toDifficulty(formData.get("brass")),
@@ -695,6 +789,7 @@
       composer: "",
       arranger: "",
       url: "",
+      overallLevel: 1,
       difficulty: {
         woodwind: 1,
         brass: 1,
@@ -1117,7 +1212,7 @@
       })
       .filter(matchesScoreFilters)
       .sort((a, b) => {
-        if (state.section === "info") return compareScoreTitles(a, b);
+        if (state.section === "info") return compareInfoItems(a, b);
         if (a.status !== b.status) return a.status === "completed" ? 1 : -1;
         return dateValue(a.dueDate) - dateValue(b.dueDate);
       });
@@ -1128,6 +1223,7 @@
     const difficulty = getScoreDifficulty(item);
     return Object.entries(state.scoreFilters).every(([key, value]) => {
       if (!value) return true;
+      if (key === "overall") return getOverallLevel(item) <= Number(value);
       return difficulty[key] <= Number(value);
     });
   }
@@ -1138,6 +1234,14 @@
     const titleDiff = TITLE_COLLATOR.compare(getSortableTitle(a.title), getSortableTitle(b.title));
     if (titleDiff) return titleDiff;
     return dateValue(a.updatedAt) - dateValue(b.updatedAt);
+  }
+
+  function compareInfoItems(a, b) {
+    if (state.infoSortMode === "overall") {
+      const levelDiff = getOverallLevel(a) - getOverallLevel(b);
+      if (levelDiff) return levelDiff;
+    }
+    return compareScoreTitles(a, b);
   }
 
   function getSortableTitle(title) {
@@ -1227,6 +1331,7 @@
 
   function normalizeItem(item) {
     const type = item.type || item.category || "task";
+    const difficulty = normalizeDifficulty(item.difficulty);
     return {
       id: String(item.id || `item-${Date.now()}`),
       type,
@@ -1237,7 +1342,8 @@
       composer: item.composer || "",
       arranger: item.arranger || "",
       url: item.url || "",
-      difficulty: normalizeDifficulty(item.difficulty),
+      overallLevel: normalizeOverallLevel(item.overallLevel ?? item.totalLevel ?? item.difficulty?.overall, difficulty),
+      difficulty,
       tags: Array.isArray(item.tags) ? sortTagsByLanguage(item.tags) : [],
       content: item.content || "",
       updatedAt: item.updatedAt || item.updated_at || new Date().toISOString()
@@ -1262,10 +1368,27 @@
     return normalizeDifficulty(item.difficulty);
   }
 
+  function normalizeOverallLevel(value, difficulty) {
+    const number = Number(value);
+    if (Number.isFinite(number)) return toOverallLevel(number);
+    const fallbackDifficulty = difficulty || normalizeDifficulty();
+    return Math.max(fallbackDifficulty.woodwind, fallbackDifficulty.brass, fallbackDifficulty.percussion);
+  }
+
+  function getOverallLevel(item) {
+    return normalizeOverallLevel(item.overallLevel ?? item.totalLevel ?? item.difficulty?.overall, getScoreDifficulty(item));
+  }
+
   function toDifficulty(value) {
     const number = Number(value);
     if (!Number.isFinite(number)) return 1;
     return Math.max(1, Math.min(5, Math.round(number)));
+  }
+
+  function toOverallLevel(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return 1;
+    return Math.max(1, Math.min(5, Math.round(number * 2) / 2));
   }
 
   function renderStars(value) {
@@ -1273,13 +1396,25 @@
     return "★".repeat(level) + "☆".repeat(5 - level);
   }
 
+  function renderLevelStars(value) {
+    const level = toOverallLevel(value);
+    const fullStars = Math.floor(level);
+    return "★".repeat(fullStars) + (level % 1 ? " ☆" : "");
+  }
+
+  function formatLevel(value) {
+    const level = toOverallLevel(value);
+    return Number.isInteger(level) ? String(level) : level.toFixed(1);
+  }
+
   function resetScoreFilters() {
     state.scoreFilters = {
+      overall: "",
       woodwind: "",
       brass: "",
       percussion: ""
     };
-    elements.scoreFilters.querySelectorAll("select").forEach((select) => {
+    elements.scoreFilters.querySelectorAll("select[data-score-filter]").forEach((select) => {
       select.value = "";
     });
   }
@@ -1309,6 +1444,30 @@
     elements.filterToggle.textContent = active ? "篩選中" : "篩選";
     elements.filterToggle.setAttribute("aria-expanded", String(isInfo && state.filtersOpen));
     elements.scoreFilters.classList.toggle("hidden", !isInfo || !state.filtersOpen);
+  }
+
+  function scheduleInfoTitleFit() {
+    if (state.section !== "info") return;
+    window.requestAnimationFrame(fitInfoTitles);
+  }
+
+  function fitInfoTitles() {
+    elements.itemList.querySelectorAll(".item-info .item-title-row h3[data-fit-title]").forEach((heading) => {
+      heading.style.fontSize = "";
+      heading.style.transform = "";
+      if (!heading.clientWidth) return;
+      let size = 1.18;
+      heading.style.fontSize = `${size}rem`;
+      while (heading.scrollWidth > heading.clientWidth && size > 0.62) {
+        const ratio = heading.clientWidth / heading.scrollWidth;
+        size = Math.max(0.62, size * Math.max(0.78, ratio));
+        heading.style.fontSize = `${size}rem`;
+      }
+      if (heading.scrollWidth > heading.clientWidth) {
+        const scale = Math.max(0.62, heading.clientWidth / heading.scrollWidth);
+        heading.style.transform = `scaleX(${scale})`;
+      }
+    });
   }
 
   function sortTagsByLanguage(tags) {
