@@ -635,10 +635,12 @@
     }
 
     if (action === "toggle-detail") {
+      const anchor = getCardViewportAnchor(id);
       state.selectedId = state.selectedId === id ? "" : id;
       state.editing = false;
       state.draftType = "";
       render();
+      restoreCardViewportAnchor(id, anchor);
       return;
     }
 
@@ -708,13 +710,37 @@
   }
 
   function handleListKeydown(event) {
-    if (event.key !== "Enter" || !event.target.matches("[data-tag-input]")) return;
-    if (!canEdit()) {
-      requireAdmin();
+    if (event.key !== "Enter") return;
+
+    if (event.target.matches("[data-tag-input]")) {
+      if (!canEdit()) {
+        requireAdmin();
+        return;
+      }
+      event.preventDefault();
+      addTag(event.target.closest(".tag-editor"));
       return;
     }
-    event.preventDefault();
-    addTag(event.target.closest(".tag-editor"));
+
+    if (event.target.closest(".editor-form") && event.target.matches("input, select")) {
+      event.preventDefault();
+    }
+  }
+
+  function getCardViewportAnchor(id) {
+    const card = elements.itemList.querySelector(`.item-card[data-id="${cssEscape(id)}"]`);
+    if (!card) return null;
+    return card.getBoundingClientRect().top;
+  }
+
+  function restoreCardViewportAnchor(id, anchor) {
+    if (anchor === null) return;
+    window.requestAnimationFrame(() => {
+      const card = elements.itemList.querySelector(`.item-card[data-id="${cssEscape(id)}"]`);
+      if (!card) return;
+      const delta = card.getBoundingClientRect().top - anchor;
+      if (Math.abs(delta) > 1) window.scrollBy(0, delta);
+    });
   }
 
   function addTag(editor) {
@@ -821,7 +847,7 @@
     return `
       <span class="tag-chip-edit" data-tag-value="${escapeAttr(tag)}">
         ${escapeHtml(tag)}
-        <button data-action="remove-tag" type="button" aria-label="蝘駁 ${escapeAttr(tag)}">?</button>
+        <button data-action="remove-tag" type="button" aria-label="刪除 ${escapeAttr(tag)}">x</button>
       </span>
     `;
   }
